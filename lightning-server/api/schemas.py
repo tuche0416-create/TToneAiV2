@@ -34,6 +34,10 @@ class AiMetadata(BaseModel):
     centralIncisorsMaskPixels: int
     toothNumbers: List[int]
     confidenceScore: float
+    graycardDetected: bool = Field(
+        default=False,
+        description="Whether 18% gray card was detected and white balance applied"
+    )
 
 
 class AnalysisResult(BaseModel):

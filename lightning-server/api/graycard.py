@@ -142,22 +142,22 @@ def apply_white_balance(image: np.ndarray, r_factor: float, g_factor: float, b_f
     return corrected
 
 
-def detect_and_correct_graycard(image: np.ndarray) -> Tuple[np.ndarray, bool]:
+def detect_and_correct_graycard(image: np.ndarray) -> Tuple[np.ndarray, bool, Optional[np.ndarray]]:
     """Main function: Detect gray card and apply white balance correction.
     
     Args:
         image: RGB image (H, W, 3), uint8
         
     Returns:
-        Tuple of (corrected_image, graycard_detected)
-        If gray card not detected, returns original image with False flag
+        Tuple of (corrected_image, graycard_detected, graycard_mask)
+        If gray card not detected, returns original image with False flag and None mask
     """
     # Detect gray card region
     graycard_mask = detect_graycard_region(image)
     
     if graycard_mask is None:
         logger.warning("Proceeding without gray card correction")
-        return image, False
+        return image, False, None
     
     # Compute correction factors
     r_factor, g_factor, b_factor = compute_correction_factors(image, graycard_mask)
@@ -170,4 +170,4 @@ def detect_and_correct_graycard(image: np.ndarray) -> Tuple[np.ndarray, bool]:
     mean_after = np.mean(corrected_graycard, axis=0)
     logger.info(f"Gray card after correction: RGB({mean_after[0]:.1f}, {mean_after[1]:.1f}, {mean_after[2]:.1f})")
     
-    return corrected_image, True
+    return corrected_image, True, graycard_mask

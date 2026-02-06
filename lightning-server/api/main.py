@@ -242,7 +242,7 @@ async def process_job(
             run_inference,
             inference_image
         )
-        mask, graycard_detected = result
+        mask, graycard_detected, graycard_mask = result
         inference_time_ms = int((time.time() - start_inference) * 1000)
         
         if graycard_detected:
@@ -290,9 +290,9 @@ async def process_job(
             full_mask = map_mask_to_original(
                 tooth_mask, crop_bbox, image_array.shape
             )
-            viz_data_uri = generate_visualization(image_array, full_mask)
+            viz_data_uri = generate_visualization(image_array, full_mask, graycard_mask)
         else:
-            viz_data_uri = generate_visualization(image_array, tooth_mask)
+            viz_data_uri = generate_visualization(image_array, tooth_mask, graycard_mask)
         if viz_data_uri is None:
             raise ValueError("Failed to generate visualization")
 
@@ -327,7 +327,8 @@ async def process_job(
                 processingTimeMs=inference_time_ms,
                 centralIncisorsMaskPixels=ai_metadata_dict["centralIncisorsMaskPixels"],
                 toothNumbers=ai_metadata_dict["toothNumbers"],
-                confidenceScore=ai_metadata_dict["confidenceScore"]
+                confidenceScore=ai_metadata_dict["confidenceScore"],
+                graycardDetected=graycard_detected
             ),
             qualityWarnings=quality_warnings
         )

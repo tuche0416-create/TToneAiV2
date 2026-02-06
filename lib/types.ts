@@ -34,6 +34,7 @@ export interface AiMetadata {
   centralIncisorsMaskPixels: number;
   toothNumbers: number[];
   confidenceScore: number;
+  graycardDetected: boolean;
 }
 
 // Complete analysis result from Lightning.ai

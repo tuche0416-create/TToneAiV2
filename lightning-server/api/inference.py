@@ -93,7 +93,7 @@ def apply_clahe(image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
 
-def preprocess_image(image: np.ndarray, apply_graycard: bool = True) -> Tuple[torch.Tensor, bool]:
+def preprocess_image(image: np.ndarray, apply_graycard: bool = True) -> Tuple[torch.Tensor, bool, Optional[np.ndarray]]:
     """Preprocess image for model inference.
 
     Steps:
@@ -108,13 +108,14 @@ def preprocess_image(image: np.ndarray, apply_graycard: bool = True) -> Tuple[to
         apply_graycard: Whether to attempt gray card correction
 
     Returns:
-        Tuple of (preprocessed tensor, graycard_detected flag)
+        Tuple of (preprocessed tensor, graycard_detected flag, graycard_mask)
     """
     graycard_detected = False
+    graycard_mask = None
     
     # Step 1: Gray card white balance correction
     if apply_graycard:
-        image, graycard_detected = detect_and_correct_graycard(image)
+        image, graycard_detected, graycard_mask = detect_and_correct_graycard(image)
     
     # Step 2: Apply CLAHE
     image = apply_clahe(image)
@@ -133,7 +134,7 @@ def preprocess_image(image: np.ndarray, apply_graycard: bool = True) -> Tuple[to
     tensor = torch.from_numpy(image).permute(2, 0, 1)
 
     # Add batch dimension
-    return tensor.unsqueeze(0), graycard_detected
+    return tensor.unsqueeze(0), graycard_detected, graycard_mask
 
 
 def remap_classes_tta(mask: np.ndarray) -> np.ndarray:
@@ -151,7 +152,7 @@ def remap_classes_tta(mask: np.ndarray) -> np.ndarray:
     return remapped
 
 
-def run_inference(image: np.ndarray) -> Tuple[np.ndarray, bool]:
+def run_inference(image: np.ndarray) -> Tuple[np.ndarray, bool, Optional[np.ndarray]]:
     """Run model inference with test-time augmentation.
 
     TTA strategy: horizontal flip with tooth class remapping
@@ -160,18 +161,18 @@ def run_inference(image: np.ndarray) -> Tuple[np.ndarray, bool]:
         image: RGB image (H, W, 3), uint8
 
     Returns:
-        Tuple of (segmentation mask (448, 448), graycard_detected flag)
+        Tuple of (segmentation mask (448, 448), graycard_detected flag, graycard_mask)
     """
     global _model, _device
 
     if _model is None:
         logger.warning("Model not loaded. Generating mock mask.")
         # Mock mask for testing: random classes
-        return np.random.randint(0, 33, (448, 448), dtype=np.uint8), False
+        return np.random.randint(0, 33, (448, 448), dtype=np.uint8), False, None
 
     with torch.no_grad():
         # Original image (with gray card correction)
-        tensor, graycard_detected = preprocess_image(image)
+        tensor, graycard_detected, graycard_mask = preprocess_image(image)
         tensor = tensor.to(_device)
         logits = _model(tensor)
 
@@ -193,5 +194,5 @@ def run_inference(image: np.ndarray) -> Tuple[np.ndarray, bool]:
         # Get class predictions
         mask = torch.argmax(logits_avg, dim=1).squeeze(0).cpu().numpy()
 
-        return mask.astype(np.uint8), graycard_detected
+        return mask.astype(np.uint8), graycard_detected, graycard_mask
 
