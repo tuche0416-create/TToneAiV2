@@ -237,12 +237,18 @@ async def process_job(
 
         # Run inference on (cropped or full) image
         start_inference = time.time()
-        mask = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_event_loop().run_in_executor(
             _executor,
             run_inference,
             inference_image
         )
+        mask, graycard_detected = result
         inference_time_ms = int((time.time() - start_inference) * 1000)
+        
+        if graycard_detected:
+            logger.info("Gray card detected and white balance applied")
+        else:
+            logger.warning("Gray card not detected, proceeding without white balance correction")
 
         # Log raw mask statistics
         unique_classes, counts = np.unique(mask, return_counts=True)
@@ -303,7 +309,7 @@ async def process_job(
         percentile = compute_percentile(wid, stats["wid_mean"], stats["wid_sd"])
 
         # Estimate tooth age
-        tooth_age = estimate_tooth_age(age, percentile)
+        tooth_age = estimate_tooth_age(age, wid, gender)
 
         # Build result
         result = AnalysisResult(

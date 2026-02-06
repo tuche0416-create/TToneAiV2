@@ -4,8 +4,10 @@ import torch.nn.functional as F
 import numpy as np
 import cv2
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import logging
+
+from .graycard import detect_and_correct_graycard
 
 logger = logging.getLogger(__name__)
 
@@ -91,22 +93,30 @@ def apply_clahe(image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
 
-def preprocess_image(image: np.ndarray) -> torch.Tensor:
+def preprocess_image(image: np.ndarray, apply_graycard: bool = True) -> Tuple[torch.Tensor, bool]:
     """Preprocess image for model inference.
 
     Steps:
-    1. Apply CLAHE
-    2. Resize to 448x448
-    3. Normalize with ImageNet statistics
-    4. Convert to tensor
+    1. Gray card white balance correction (if detected)
+    2. Apply CLAHE
+    3. Resize to 448x448
+    4. Normalize with ImageNet statistics
+    5. Convert to tensor
 
     Args:
         image: RGB image (H, W, 3), uint8
+        apply_graycard: Whether to attempt gray card correction
 
     Returns:
-        Preprocessed tensor (1, 3, 448, 448)
+        Tuple of (preprocessed tensor, graycard_detected flag)
     """
-    # Apply CLAHE
+    graycard_detected = False
+    
+    # Step 1: Gray card white balance correction
+    if apply_graycard:
+        image, graycard_detected = detect_and_correct_graycard(image)
+    
+    # Step 2: Apply CLAHE
     image = apply_clahe(image)
 
     # Resize to 448x448
@@ -123,7 +133,7 @@ def preprocess_image(image: np.ndarray) -> torch.Tensor:
     tensor = torch.from_numpy(image).permute(2, 0, 1)
 
     # Add batch dimension
-    return tensor.unsqueeze(0)
+    return tensor.unsqueeze(0), graycard_detected
 
 
 def remap_classes_tta(mask: np.ndarray) -> np.ndarray:
@@ -141,7 +151,7 @@ def remap_classes_tta(mask: np.ndarray) -> np.ndarray:
     return remapped
 
 
-def run_inference(image: np.ndarray) -> np.ndarray:
+def run_inference(image: np.ndarray) -> Tuple[np.ndarray, bool]:
     """Run model inference with test-time augmentation.
 
     TTA strategy: horizontal flip with tooth class remapping
@@ -150,21 +160,22 @@ def run_inference(image: np.ndarray) -> np.ndarray:
         image: RGB image (H, W, 3), uint8
 
     Returns:
-        Segmentation mask (448, 448), uint8 with class indices
+        Tuple of (segmentation mask (448, 448), graycard_detected flag)
     """
     global _model, _device
 
     if _model is None:
         logger.warning("Model not loaded. Generating mock mask.")
         # Mock mask for testing: random classes
-        return np.random.randint(0, 33, (448, 448), dtype=np.uint8)
+        return np.random.randint(0, 33, (448, 448), dtype=np.uint8), False
 
     with torch.no_grad():
-        # Original image
-        tensor = preprocess_image(image).to(_device)
+        # Original image (with gray card correction)
+        tensor, graycard_detected = preprocess_image(image)
+        tensor = tensor.to(_device)
         logits = _model(tensor)
 
-        # Flipped image
+        # Flipped image (reuse same corrected image, no need to re-detect graycard)
         tensor_flipped = torch.flip(tensor, dims=[3])
         logits_flipped = _model(tensor_flipped)
         # Flip back spatially
@@ -182,4 +193,5 @@ def run_inference(image: np.ndarray) -> np.ndarray:
         # Get class predictions
         mask = torch.argmax(logits_avg, dim=1).squeeze(0).cpu().numpy()
 
-        return mask.astype(np.uint8)
+        return mask.astype(np.uint8), graycard_detected
+

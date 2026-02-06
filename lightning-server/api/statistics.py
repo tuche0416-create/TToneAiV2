@@ -104,39 +104,43 @@ def compute_percentile(wid: float, wid_mean: float, wid_sd: float) -> float:
     return 100 - normal_cdf(z) * 100
 
 
-def estimate_tooth_age(user_age: int, percentile: float) -> int:
-    """Estimate tooth appearance age from chronological age and percentile.
+def estimate_tooth_age(user_age: int, wid: float, gender: str) -> int:
+    """Estimate tooth age based on distance from mean WID of each age group.
 
-    Percentile deviation from 50 indicates teeth appear younger/older:
-    - Lower percentile (whiter) -> younger tooth age
-    - Higher percentile (yellower) -> older tooth age
-
-    Age-dependent biases reflect clinical reality:
-    - Young people: smaller range (teeth look similar)
-    - Older people: larger range (more lifestyle variation)
-
+    Finds the age group whose average WID is closest to the user's WID.
+    Returns the center of that age group.
+    
     Args:
-        user_age: Chronological age in years
-        percentile: WID percentile (0-100)
+        user_age: Chronological age (unused in simple distance metric, but kept for interface)
+        wid: User's WID value
+        gender: "male" or "female"
 
     Returns:
-        Estimated tooth appearance age (bounded to [5, 95])
+        Estimated age
     """
-    offset = (percentile - 50) / 50
+    # Filter research data by gender (including mixed if needed)
+    candidates = []
+    
+    # helper to add candidate
+    def add_candidates(target_gender):
+        for row in RESEARCH_DATA:
+            if row["gender"] == target_gender:
+                # Calculate distance
+                dist = abs(row["wid_mean"] - wid)
+                mid_age = (row["age_min"] + row["age_max"]) // 2
+                candidates.append((dist, mid_age, row))
 
-    if user_age <= 20:
-        younger_bias, older_bias = 8, 12
-    elif user_age <= 40:
-        younger_bias, older_bias = 12, 15
-    elif user_age <= 60:
-        younger_bias, older_bias = 15, 18
-    else:
-        younger_bias, older_bias = 18, 20
-
-    adjustment = offset * younger_bias if offset < 0 else offset * older_bias
-    estimated = user_age + adjustment
-
-    lower = max(5, user_age - younger_bias)
-    upper = min(95, user_age + older_bias)
-
-    return int(round(max(lower, min(upper, estimated))))
+    add_candidates(gender)
+    
+    # If no gender specific data found (unlikely), fallback to mixed
+    if not candidates:
+        add_candidates("mixed")
+        
+    # Sort by distance (closest first)
+    candidates.sort(key=lambda x: x[0])
+    
+    # Return the age of the closest match
+    best_match = candidates[0]
+    estimated_age = best_match[1]
+    
+    return int(estimated_age)

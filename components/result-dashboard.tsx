@@ -20,169 +20,142 @@ export default function ResultDashboard({
 }: ResultDashboardProps) {
   const ageDiff = result.estimatedAge - userInfo.age;
   const ageComparison = useMemo(() => {
-    if (ageDiff <= -3) return { label: "더 젊음", color: "text-emerald-600", bg: "bg-emerald-50", emoji: "✨" };
-    if (ageDiff >= 3) return { label: "더 늙음", color: "text-amber-600", bg: "bg-amber-50", emoji: "⏳" };
-    return { label: "나이 대비 적절", color: "text-blue-600", bg: "bg-blue-50", emoji: "👍" };
+    if (ageDiff <= -3) return { label: "더 젊어 보여요", color: "text-emerald-700", bg: "bg-emerald-50", emoji: "✨" };
+    if (ageDiff >= 3) return { label: "관리가 필요해요", color: "text-amber-700", bg: "bg-amber-50", emoji: "💪" };
+    return { label: "나이와 비슷해요", color: "text-slate-700", bg: "bg-slate-100", emoji: "👍" };
   }, [ageDiff]);
 
-  const originalImageUrl = useMemo(() => {
-    if (!originalImage) return null;
-    return URL.createObjectURL(originalImage);
-  }, [originalImage]);
-
   return (
-    <div className="min-h-screen px-6 py-8">
-      <div className="max-w-md w-full mx-auto space-y-5">
+    <div className="min-h-screen bg-[#F0EBE3] px-6 py-12 flex items-center justify-center">
+      <div className="max-w-md w-full mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-1">
-          <h2 className="text-2xl font-bold">진단 결과</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            AI가 분석한 치아 상태입니다
+        <div className="text-center space-y-2 mb-8">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">진단 리포트</h2>
+          <p className="text-sm text-slate-500 font-medium">
+            AI가 분석한 당신의 치아 색상입니다
           </p>
         </div>
 
         {/* Tooth Age - Hero Card */}
-        <Card className="shadow-sm border-0 bg-white overflow-hidden">
-          <CardContent className="p-6 text-center space-y-3">
-            <p className="text-sm text-[var(--muted-foreground)]">추정 치아 나이</p>
-            <div className="flex items-baseline justify-center gap-1">
-              <span className="text-6xl font-bold tracking-tight">
-                {result.estimatedAge}
-              </span>
-              <span className="text-2xl text-[var(--muted-foreground)]">세</span>
+        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden ring-1 ring-slate-900/5">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Estimated Tooth Age</p>
+              <div className="flex items-baseline justify-center gap-1.5 status-text-animation">
+                <span className="text-7xl font-bold tracking-tighter text-slate-900">
+                  {result.estimatedAge}
+                </span>
+                <span className="text-2xl text-slate-400 font-medium">세</span>
+              </div>
             </div>
+
             <div
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${ageComparison.bg} ${ageComparison.color}`}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${ageComparison.bg} ${ageComparison.color}`}
             >
-              <span>{ageComparison.emoji}</span>
-              <span>실제 나이({userInfo.age}세) 대비 {ageComparison.label}</span>
+              <span className="text-lg">{ageComparison.emoji}</span>
+              <span>실제 나이 대비 {ageComparison.label}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* WID Gauge */}
-        <Card className="shadow-sm border-0 bg-white">
-          <CardContent className="p-6 space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-[var(--muted-foreground)] mb-4">
-                WID (치아 미백 지수)
-              </p>
-              <WIDGauge wid={result.wid} />
-              <p className="text-3xl font-bold mt-2">{result.wid.toFixed(1)}</p>
-            </div>
-            {/* Percentile */}
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <div className="text-center px-4 py-2 rounded-xl bg-[var(--secondary)]">
-                <p className="text-xs text-[var(--muted-foreground)]">백분위</p>
-                <p className="text-lg font-bold">
-                  상위 {result.percentile.toFixed(0)}%
-                </p>
+        {/* AI Visualization (Only Result) */}
+        {result.visualization?.image && (
+          <div className="flex justify-center relative z-10">
+            <div className="relative w-full aspect-[4/3] max-w-[280px] rounded-2xl overflow-hidden shadow-lg border-4 border-white/50">
+              <img
+                src={result.visualization.image}
+                alt="AI Analysis"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
+                AI 분석 결과
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Lab Values */}
-        <Card className="shadow-sm border-0 bg-white">
-          <CardContent className="p-4">
-            <p className="text-sm text-[var(--muted-foreground)] mb-3">
-              CIELab 색상 값
-            </p>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-lg bg-[var(--secondary)] p-3">
-                <p className="text-xs text-[var(--muted-foreground)]">L* (밝기)</p>
-                <p className="text-lg font-semibold">
-                  {result.labValues.l.toFixed(1)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-[var(--secondary)] p-3">
-                <p className="text-xs text-[var(--muted-foreground)]">a* (적-녹)</p>
-                <p className="text-lg font-semibold">
-                  {result.labValues.a.toFixed(1)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-[var(--secondary)] p-3">
-                <p className="text-xs text-[var(--muted-foreground)]">b* (황-청)</p>
-                <p className="text-lg font-semibold">
-                  {result.labValues.b.toFixed(1)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Visualization */}
-        <Card className="shadow-sm border-0 bg-white overflow-hidden">
-          <CardContent className="p-4 space-y-3">
-            <p className="text-sm text-[var(--muted-foreground)]">
-              AI 치아 영역 검출
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {originalImageUrl && (
-                <div className="space-y-1">
-                  <img
-                    src={originalImageUrl}
-                    alt="원본 이미지"
-                    className="w-full aspect-square object-cover rounded-lg"
-                  />
-                  <p className="text-xs text-center text-[var(--muted-foreground)]">
-                    원본
-                  </p>
-                </div>
-              )}
-              {result.visualization?.image && (
-                <div className="space-y-1">
-                  <img
-                    src={result.visualization.image}
-                    alt="AI 분석 결과"
-                    className="w-full aspect-square object-cover rounded-lg"
-                  />
-                  <p className="text-xs text-center text-[var(--muted-foreground)]">
-                    AI 검출 영역
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quality Warnings */}
-        {result.qualityWarnings.length > 0 && (
-          <div className="bg-amber-50 rounded-xl p-3 text-center">
-            <p className="text-sm text-amber-700">
-              ⚠️{" "}
-              {result.qualityWarnings
-                .map((w) => {
-                  if (w === "low_brightness") return "이미지가 다소 어둡습니다";
-                  if (w === "blur_detected") return "이미지가 다소 흐릿합니다";
-                  return w;
-                })
-                .join(", ")}
-            </p>
           </div>
         )}
 
-        {/* AI Metadata */}
-        <div className="text-center text-xs text-[var(--muted-foreground)] space-y-1">
-          <p>
-            검출 치아: {result.aiMetadata.detectedTeethCount}개 · 처리 시간:{" "}
-            {(result.aiMetadata.processingTimeMs / 1000).toFixed(1)}초
-          </p>
-          <p>신뢰도: {(result.aiMetadata.confidenceScore * 100).toFixed(0)}%</p>
+        {/* Analysis Details Grid */}
+        <div className="grid gap-4">
+          {/* WID & Percentile */}
+          <Card className="shadow-md border-0 bg-white rounded-2xl p-6">
+            <div className="text-center space-y-4">
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  WID Analysis
+                </p>
+                <p className="text-slate-900 font-semibold">치아 색상 분석 지수</p>
+              </div>
+
+              <div className="relative py-2">
+                <WIDGauge wid={result.wid} />
+                <div className="absolute inset-x-0 bottom-0 text-center translate-y-2">
+                  <p className="text-4xl font-bold text-slate-900 tracking-tight">{result.wid.toFixed(1)}</p>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <div className="bg-slate-50 rounded-xl py-3 px-4 inline-block w-full">
+                  <p className="text-xs text-slate-500 mb-1">Total Whiteness Rank</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    상위 {result.percentile.toFixed(0)}%
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    (0%에 가까울수록 가장 밝은 치아입니다)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Lab Values */}
+          <Card className="shadow-md border-0 bg-white rounded-2xl overflow-hidden">
+            <div className="p-5 bg-slate-50 border-b border-slate-100">
+              <p className="text-sm font-semibold text-slate-600">CIELab 상세 분석</p>
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-slate-100">
+              <div className="p-4 text-center">
+                <p className="text-xs text-slate-400 font-medium mb-1">L* (명도)</p>
+                <p className="text-lg font-bold text-slate-900">{result.labValues.l.toFixed(1)}</p>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-xs text-slate-400 font-medium mb-1">a* (적색도)</p>
+                <p className="text-lg font-bold text-slate-900">{result.labValues.a.toFixed(1)}</p>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-xs text-slate-400 font-medium mb-1">b* (황색도)</p>
+                <p className="text-lg font-bold text-slate-900">{result.labValues.b.toFixed(1)}</p>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        {/* Retry Button */}
-        <Button
-          onClick={onRetry}
-          variant="outline"
-          className="w-full h-12 rounded-xl"
-        >
-          다시 진단하기
-        </Button>
+        {/* Footer Info */}
+        <div className="pt-4 text-center space-y-2">
+          <div className="flex justify-center gap-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
+            <span>AI Confidence {(result.aiMetadata.confidenceScore * 100).toFixed(0)}%</span>
+            <span>•</span>
+            <span>Process Time {(result.aiMetadata.processingTimeMs / 1000).toFixed(1)}s</span>
+          </div>
 
-        <p className="text-xs text-center text-[var(--muted-foreground)] pb-4">
-          본 서비스는 참고용이며 의료 진단을 대체하지 않습니다.
-        </p>
+          {/* Quality Warnings */}
+          {result.qualityWarnings.length > 0 && (
+            <div className="inline-block bg-amber-50 text-amber-600 text-xs px-3 py-1 rounded-full">
+              ⚠️ {result.qualityWarnings.join(", ")}
+            </div>
+          )}
+
+          <Button
+            onClick={onRetry}
+            size="lg"
+            className="w-full h-14 text-lg rounded-2xl bg-slate-900 hover:bg-slate-800 text-white shadow-xl shadow-slate-900/10 mt-4 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            다시 진단하기
+          </Button>
+
+          <p className="text-xs text-slate-400 pt-4 pb-8">
+            의료적 진단이 아닌 AI 분석 결과입니다.
+          </p>
+        </div>
       </div>
     </div>
   );
