@@ -17,6 +17,7 @@ export default function CameraUpload({ onCapture, onBack }: CameraUploadProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): boolean => {
     // iOS Safari can send empty MIME type
@@ -95,6 +96,7 @@ export default function CameraUpload({ onCapture, onBack }: CameraUploadProps) {
     setSelectedFile(null);
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   return (
@@ -153,7 +155,7 @@ export default function CameraUpload({ onCapture, onBack }: CameraUploadProps) {
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full aspect-[4/3] cursor-pointer bg-[var(--secondary)] hover:bg-[var(--accent)] transition-colors">
+              <div className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-[var(--secondary)] gap-3 p-4">
                 <div className="text-center space-y-3">
                   <div className="text-5xl">📷</div>
                   <div>
@@ -165,15 +167,36 @@ export default function CameraUpload({ onCapture, onBack }: CameraUploadProps) {
                     </p>
                   </div>
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </label>
+                <div className="flex gap-3 w-full">
+                  <label className="flex-1">
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      capture="environment"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center justify-center h-24 rounded-lg bg-white hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200">
+                      <div className="text-3xl mb-1">📸</div>
+                      <p className="text-xs font-medium">카메라로 촬영</p>
+                    </div>
+                  </label>
+                  <label className="flex-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center justify-center h-24 rounded-lg bg-white hover:bg-gray-50 cursor-pointer transition-colors border border-gray-200">
+                      <div className="text-3xl mb-1">🖼️</div>
+                      <p className="text-xs font-medium">갤러리에서 선택</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
