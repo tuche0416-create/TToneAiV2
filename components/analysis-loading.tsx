@@ -18,6 +18,12 @@ const PROGRESS_MAP: Record<string, { label: string; value: number }> = {
 
 export default function AnalysisLoading({ state, onRetry }: AnalysisLoadingProps) {
   if (state.phase === "failed") {
+    // Provide user-friendly Korean error message based on error type
+    const isToothDetectionError = state.error?.includes("No valid tooth regions");
+    const userFriendlyError = isToothDetectionError
+      ? "치아가 잘 보이지 않아요"
+      : state.error;
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
         <div className="max-w-md w-full text-center space-y-6">
@@ -27,9 +33,37 @@ export default function AnalysisLoading({ state, onRetry }: AnalysisLoadingProps
           <div className="space-y-2">
             <h2 className="text-xl font-bold">분석에 실패했습니다</h2>
             <p className="text-sm text-[var(--muted-foreground)]">
-              {state.error}
+              {userFriendlyError}
             </p>
           </div>
+
+          {/* Show tips for tooth detection errors */}
+          {isToothDetectionError && (
+            <div className="bg-[var(--secondary)] rounded-xl p-4 space-y-3">
+              <p className="text-sm font-medium">💡 다시 촬영할 때 참고해주세요</p>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs text-[var(--muted-foreground)]">
+                <div className="space-y-1">
+                  <div className="w-full aspect-square rounded-lg bg-white flex items-center justify-center text-2xl">
+                    💡
+                  </div>
+                  <p>밝은 곳에서</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="w-full aspect-square rounded-lg bg-white flex items-center justify-center text-2xl">
+                    😁
+                  </div>
+                  <p>입을 크게 벌려요</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="w-full aspect-square rounded-lg bg-white flex items-center justify-center text-2xl">
+                    📸
+                  </div>
+                  <p>치아가 정면으로</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {state.canRetry && (
             <Button
               onClick={onRetry}

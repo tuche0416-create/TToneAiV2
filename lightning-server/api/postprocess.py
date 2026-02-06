@@ -6,10 +6,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Central incisors: #11 (class 1), #21 (class 9), #12 (class 2), #22 (class 10)
+# Central incisors: #11 (class 1), #21 (class 9)
 CENTRAL_INCISOR_CLASSES = [1, 9]
+# Lateral incisors: #12 (class 2), #22 (class 10)
 LATERAL_INCISOR_CLASSES = [2, 10]
-MIN_TOOTH_PIXELS = 100
+# Canines: #13 (class 3), #23 (class 11)
+CANINE_CLASSES = [3, 11]
+# All front teeth for final fallback (incisors + canines)
+ALL_FRONT_TEETH_CLASSES = [1, 2, 3, 9, 10, 11]
+# Lowered threshold for better detection of smaller teeth
+MIN_TOOTH_PIXELS = 50
 
 
 def refine_mask(mask: np.ndarray) -> np.ndarray:
@@ -79,11 +85,13 @@ def _class_to_fdi(class_id: int) -> int:
 
 
 def extract_tooth_regions(mask: np.ndarray) -> Tuple[Optional[np.ndarray], List[int], int]:
-    """Extract priority tooth regions (central incisors first).
+    """Extract priority tooth regions with multiple fallback strategies.
 
     Priority order:
-    1. #11 (class 1), #21 (class 9)
-    2. If insufficient pixels, try #12 (class 2), #22 (class 10)
+    1. Central incisors: #11 (class 1), #21 (class 9)
+    2. Lateral incisors: #12 (class 2), #22 (class 10)
+    3. Canines: #13 (class 3), #23 (class 11)
+    4. Any visible front teeth combined
 
     Args:
         mask: Refined segmentation mask (448, 448)
@@ -94,29 +102,13 @@ def extract_tooth_regions(mask: np.ndarray) -> Tuple[Optional[np.ndarray], List[
         - List of detected tooth numbers (FDI notation)
         - Total pixel count
     """
-    tooth_mask = np.zeros_like(mask, dtype=np.uint8)
-    detected_teeth = []
-    total_pixels = 0
-
-    # Try central incisors first
-    for class_id in CENTRAL_INCISOR_CLASSES:
-        region = (mask == class_id)
-        pixel_count = np.sum(region)
-
-        if pixel_count >= MIN_TOOTH_PIXELS:
-            tooth_mask[region] = 1
-            tooth_number = _class_to_fdi(class_id)
-            detected_teeth.append(tooth_number)
-            total_pixels += pixel_count
-
-    # If insufficient pixels, try lateral incisors
-    if total_pixels < MIN_TOOTH_PIXELS:
-        logger.info("Insufficient central incisor pixels, trying lateral incisors")
-        tooth_mask.fill(0)
-        detected_teeth.clear()
+    def try_classes(class_list: List[int], label: str) -> Tuple[np.ndarray, List[int], int]:
+        """Try to extract teeth from given class list."""
+        tooth_mask = np.zeros_like(mask, dtype=np.uint8)
+        detected_teeth = []
         total_pixels = 0
 
-        for class_id in LATERAL_INCISOR_CLASSES:
+        for class_id in class_list:
             region = (mask == class_id)
             pixel_count = np.sum(region)
 
@@ -126,9 +118,41 @@ def extract_tooth_regions(mask: np.ndarray) -> Tuple[Optional[np.ndarray], List[
                 detected_teeth.append(tooth_number)
                 total_pixels += pixel_count
 
-    if total_pixels == 0:
-        logger.warning("No valid tooth regions found")
-        return None, [], 0
+        if total_pixels >= MIN_TOOTH_PIXELS:
+            logger.info(f"Detected {label}: {detected_teeth}, {total_pixels} pixels")
+        return tooth_mask, detected_teeth, total_pixels
 
-    logger.info(f"Extracted {len(detected_teeth)} teeth: {detected_teeth}, {total_pixels} pixels")
-    return tooth_mask, detected_teeth, total_pixels
+    # Strategy 1: Central incisors (best for accurate WID measurement)
+    tooth_mask, detected_teeth, total_pixels = try_classes(
+        CENTRAL_INCISOR_CLASSES, "central incisors"
+    )
+    if total_pixels >= MIN_TOOTH_PIXELS:
+        return tooth_mask, detected_teeth, total_pixels
+
+    # Strategy 2: Lateral incisors
+    logger.info("Insufficient central incisors, trying lateral incisors")
+    tooth_mask, detected_teeth, total_pixels = try_classes(
+        LATERAL_INCISOR_CLASSES, "lateral incisors"
+    )
+    if total_pixels >= MIN_TOOTH_PIXELS:
+        return tooth_mask, detected_teeth, total_pixels
+
+    # Strategy 3: Canines
+    logger.info("Insufficient lateral incisors, trying canines")
+    tooth_mask, detected_teeth, total_pixels = try_classes(
+        CANINE_CLASSES, "canines"
+    )
+    if total_pixels >= MIN_TOOTH_PIXELS:
+        return tooth_mask, detected_teeth, total_pixels
+
+    # Strategy 4: Combine all front teeth
+    logger.info("Insufficient single class, trying all front teeth combined")
+    tooth_mask, detected_teeth, total_pixels = try_classes(
+        ALL_FRONT_TEETH_CLASSES, "all front teeth"
+    )
+    if total_pixels >= MIN_TOOTH_PIXELS:
+        return tooth_mask, detected_teeth, total_pixels
+
+    logger.warning("No valid tooth regions found after all strategies")
+    return None, [], 0
+
