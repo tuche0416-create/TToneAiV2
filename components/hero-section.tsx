@@ -9,11 +9,9 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ onStart }: HeroSectionProps) {
-  // Pre-warm Lightning.ai on mount with proper cleanup
+  // Fire-and-forget pre-warm: don't abort on unmount so server stays warm
   useEffect(() => {
-    const controller = new AbortController();
-    checkHealth(controller.signal).catch(() => {});
-    return () => controller.abort();
+    checkHealth().catch(() => {});
   }, []);
 
   return (

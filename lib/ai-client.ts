@@ -8,25 +8,29 @@ export interface SubmitParams {
   mouthInfo?: MouthInfo;
 }
 
+// Helper to combine external signal with timeout controller
+function getCombinedSignal(controller: AbortController, externalSignal?: AbortSignal): AbortSignal {
+  if (!externalSignal) return controller.signal;
+
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([externalSignal, controller.signal]);
+  }
+
+  // Fallback
+  if (externalSignal.aborted) {
+    controller.abort();
+  } else {
+    externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+  return controller.signal;
+}
+
 export async function checkHealth(externalSignal?: AbortSignal): Promise<boolean> {
   try {
     const timeoutController = new AbortController();
     const timeoutId = setTimeout(() => timeoutController.abort(), HEALTH_CHECK_TIMEOUT_MS);
 
-    // Combine external signal (component lifecycle) with internal timeout
-    let signal: AbortSignal = timeoutController.signal;
-    if (externalSignal) {
-      if (typeof AbortSignal.any === 'function') {
-        signal = AbortSignal.any([externalSignal, timeoutController.signal]);
-      } else {
-        // Fallback: forward external abort to timeout controller
-        if (externalSignal.aborted) {
-          clearTimeout(timeoutId);
-          return false;
-        }
-        externalSignal.addEventListener('abort', () => timeoutController.abort(), { once: true });
-      }
-    }
+    const signal = getCombinedSignal(timeoutController, externalSignal);
 
     const res = await fetch(`${AI_SERVER_URL}/health`, { signal });
     clearTimeout(timeoutId);
@@ -36,7 +40,7 @@ export async function checkHealth(externalSignal?: AbortSignal): Promise<boolean
   }
 }
 
-export async function submitAnalysis(params: SubmitParams): Promise<string> {
+export async function submitAnalysis(params: SubmitParams, externalSignal?: AbortSignal): Promise<string> {
   const formData = new FormData();
   formData.append('image', params.image);
   formData.append('gender', params.gender);
@@ -48,36 +52,50 @@ export async function submitAnalysis(params: SubmitParams): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SUBMIT_TIMEOUT_MS);
 
-  const res = await fetch(`${AI_SERVER_URL}/analyze`, {
-    method: 'POST',
-    body: formData,
-    signal: controller.signal,
-  });
-  clearTimeout(timeoutId);
+  const signal = getCombinedSignal(controller, externalSignal);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: 'Analysis submission failed' }));
-    throw new Error(err.message || `HTTP ${res.status}`);
+  try {
+    const res = await fetch(`${AI_SERVER_URL}/analyze`, {
+      method: 'POST',
+      body: formData,
+      signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Analysis submission failed' }));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const { job_id } = await res.json();
+    return job_id;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
   }
-
-  const { job_id } = await res.json();
-  return job_id;
 }
 
-export async function pollStatus(jobId: string): Promise<JobStatusResponse> {
+export async function pollStatus(jobId: string, externalSignal?: AbortSignal): Promise<JobStatusResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
 
-  const res = await fetch(`${AI_SERVER_URL}/status/${jobId}`, {
-    signal: controller.signal,
-  });
-  clearTimeout(timeoutId);
+  const signal = getCombinedSignal(controller, externalSignal);
 
-  if (!res.ok) {
-    if (res.status === 404) {
-      throw new Error('Job not found or expired');
+  try {
+    const res = await fetch(`${AI_SERVER_URL}/status/${jobId}`, {
+      signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error('Job not found or expired');
+      }
+      throw new Error('Status check failed');
     }
-    throw new Error('Status check failed');
+    return res.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
   }
-  return res.json();
 }
