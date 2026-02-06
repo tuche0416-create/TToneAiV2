@@ -165,12 +165,20 @@ async def process_job(
         )
         inference_time_ms = int((time.time() - start_inference) * 1000)
 
+        # Log raw mask statistics
+        unique_classes, counts = np.unique(mask, return_counts=True)
+        logger.info(f"Raw mask classes: {dict(zip(unique_classes, counts))}")
+
         # Update progress
         _jobs[job_id].progress = "postprocessing"
         _jobs[job_id].message = "Refining mask and extracting tooth regions"
 
         # Refine mask
         refined_mask = refine_mask(mask)
+
+        # Log refined mask statistics
+        unique_classes_refined, counts_refined = np.unique(refined_mask, return_counts=True)
+        logger.info(f"Refined mask classes: {dict(zip(unique_classes_refined, counts_refined))}")
 
         # Extract tooth regions
         tooth_mask, detected_teeth, total_pixels = extract_tooth_regions(refined_mask)

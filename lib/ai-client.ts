@@ -10,9 +10,13 @@ export interface SubmitParams {
 
 export async function checkHealth(): Promise<boolean> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+
     const res = await fetch(`${AI_SERVER_URL}/health`, {
-      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     return res.ok;
   } catch {
     return false;
@@ -28,11 +32,15 @@ export async function submitAnalysis(params: SubmitParams): Promise<string> {
     formData.append('mouth_info', JSON.stringify(params.mouthInfo));
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SUBMIT_TIMEOUT_MS);
+
   const res = await fetch(`${AI_SERVER_URL}/analyze`, {
     method: 'POST',
     body: formData,
-    signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
+    signal: controller.signal,
   });
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'Analysis submission failed' }));
@@ -44,9 +52,14 @@ export async function submitAnalysis(params: SubmitParams): Promise<string> {
 }
 
 export async function pollStatus(jobId: string): Promise<JobStatusResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+
   const res = await fetch(`${AI_SERVER_URL}/status/${jobId}`, {
-    signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
+    signal: controller.signal,
   });
+  clearTimeout(timeoutId);
+
   if (!res.ok) {
     if (res.status === 404) {
       throw new Error('Job not found or expired');
