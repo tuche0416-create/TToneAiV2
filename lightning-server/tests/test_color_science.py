@@ -1,6 +1,6 @@
 """Tests for color science module - exact RGB->Lab->WID conversions."""
 import pytest
-from app.color_science import (
+from api.color_science import (
     D65,
     compute_wid,
     linear_rgb_to_xyz,

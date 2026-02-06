@@ -1,7 +1,7 @@
 """Tests for statistics module - research data lookup and percentile calculation."""
 import math
 import pytest
-from app.statistics import (
+from api.statistics import (
     RESEARCH_DATA,
     compute_percentile,
     estimate_tooth_age,

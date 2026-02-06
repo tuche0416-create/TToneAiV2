@@ -2,6 +2,7 @@
 import asyncio
 import base64
 import io
+import json
 import logging
 import time
 import uuid
@@ -84,6 +85,74 @@ MIN_BRIGHTNESS = 30
 MAX_BRIGHTNESS = 225
 
 
+def crop_mouth_region(
+    image: np.ndarray, mouth_info: dict, padding: float = 2.0
+) -> tuple:
+    """Crop image to mouth region using MediaPipe landmarks.
+
+    Args:
+        image: RGB image (H, W, 3)
+        mouth_info: dict with centerX, centerY, width, height (pixel coords)
+        padding: multiplier for bounding box (2.0 = 2x mouth size to include teeth)
+
+    Returns:
+        Tuple of (cropped_image, (x1, y1, x2, y2)) or (image, None) if crop fails
+    """
+    h, w = image.shape[:2]
+
+    try:
+        cx = float(mouth_info["centerX"])
+        cy = float(mouth_info["centerY"])
+        mw = float(mouth_info["width"]) * padding
+        mh = float(mouth_info["height"]) * padding
+
+        x1 = max(0, int(cx - mw / 2))
+        y1 = max(0, int(cy - mh / 2))
+        x2 = min(w, int(cx + mw / 2))
+        y2 = min(h, int(cy + mh / 2))
+
+        # Ensure minimum crop size
+        if (x2 - x1) < 50 or (y2 - y1) < 50:
+            logger.warning("Mouth crop region too small, using full image")
+            return image, None
+
+        cropped = image[y1:y2, x1:x2].copy()
+        logger.info(f"Cropped mouth region: ({x1},{y1})-({x2},{y2}) from {w}x{h}")
+        return cropped, (x1, y1, x2, y2)
+
+    except (KeyError, ValueError, TypeError) as e:
+        logger.warning(f"Failed to parse mouth_info for cropping: {e}")
+        return image, None
+
+
+def map_mask_to_original(
+    tooth_mask: np.ndarray, crop_bbox: tuple, original_shape: tuple
+) -> np.ndarray:
+    """Map 448x448 tooth mask back to original image coordinates.
+
+    Args:
+        tooth_mask: Binary mask (448, 448)
+        crop_bbox: (x1, y1, x2, y2) crop bounding box in original image
+        original_shape: (H, W) of original image
+
+    Returns:
+        Full-size binary mask matching original image dimensions
+    """
+    x1, y1, x2, y2 = crop_bbox
+    crop_h, crop_w = y2 - y1, x2 - x1
+
+    # Resize tooth_mask to crop dimensions
+    resized_mask = cv2.resize(
+        tooth_mask, (crop_w, crop_h), interpolation=cv2.INTER_NEAREST
+    )
+
+    # Place into full-size mask
+    full_mask = np.zeros(original_shape[:2], dtype=np.uint8)
+    full_mask[y1:y2, x1:x2] = resized_mask
+
+    return full_mask
+
+
 def validate_image_bytes(content: bytes) -> Optional[str]:
     """Validate image format using magic bytes.
 
@@ -152,16 +221,26 @@ async def process_job(
         # Check quality
         quality_warnings = check_image_quality(image_array)
 
+        # Crop to mouth region if mouth_info is available
+        crop_bbox = None
+        inference_image = image_array
+        if mouth_info:
+            try:
+                mi = json.loads(mouth_info)
+                inference_image, crop_bbox = crop_mouth_region(image_array, mi)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Failed to parse mouth_info: {e}, using full image")
+
         # Update progress
         _jobs[job_id].progress = "inference"
         _jobs[job_id].message = "Running AI model inference with TTA"
 
-        # Run inference
+        # Run inference on (cropped or full) image
         start_inference = time.time()
         mask = await asyncio.get_event_loop().run_in_executor(
             _executor,
             run_inference,
-            image_array
+            inference_image
         )
         inference_time_ms = int((time.time() - start_inference) * 1000)
 
@@ -186,9 +265,9 @@ async def process_job(
         if tooth_mask is None or total_pixels == 0:
             raise ValueError("No valid tooth regions detected in image")
 
-        # Extract RGB
+        # Extract RGB from inference image (cropped or full)
         rgb_result, ai_metadata_dict = extract_average_rgb(
-            image_array,
+            inference_image,
             tooth_mask,
             detected_teeth,
             total_pixels
@@ -199,8 +278,15 @@ async def process_job(
 
         r_mean, g_mean, b_mean = rgb_result
 
-        # Generate visualization
-        viz_data_uri = generate_visualization(image_array, tooth_mask)
+        # Generate visualization on original image
+        if crop_bbox is not None:
+            # Map tooth_mask back to original image coordinates
+            full_mask = map_mask_to_original(
+                tooth_mask, crop_bbox, image_array.shape
+            )
+            viz_data_uri = generate_visualization(image_array, full_mask)
+        else:
+            viz_data_uri = generate_visualization(image_array, tooth_mask)
         if viz_data_uri is None:
             raise ValueError("Failed to generate visualization")
 

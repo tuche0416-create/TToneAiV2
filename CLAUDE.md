@@ -33,7 +33,7 @@ Lightning.ai server (Python):
 ```bash
 cd lightning-server
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Data Flow
@@ -52,13 +52,13 @@ Client: Image + UserInfo + MouthInfo (MediaPipe)
 - `components/` — UI components per step + Shadcn `ui/` primitives
 - `lib/ai-client.ts` — Lightning.ai API client (submit, poll, health)
 - `lib/use-analysis.ts` — React hook for analysis flow (polling + cold start)
-- `lightning-server/app/` — Python FastAPI server (inference, color science, statistics)
+- `lightning-server/api/` — Python FastAPI server (inference, color science, statistics)
 
 **No `app/api/` directory** — Vercel has zero API routes.
 
 ## CRITICAL: Protected Algorithms (NEVER modify logic)
 
-These algorithms are implemented in Python on Lightning.ai (`lightning-server/app/`):
+These algorithms are implemented in Python on Lightning.ai (`lightning-server/api/`):
 - `color_science.py` — sRGB→Linear→XYZ→CIELab (D65: {x:95.047, y:100.0, z:108.883})
 - `statistics.py` — WID formula, percentile (normal CDF), tooth age estimation
 - `data.csv` — Research dataset (Lab means/SDs per gender/age group)
