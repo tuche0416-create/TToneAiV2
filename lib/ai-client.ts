@@ -8,14 +8,27 @@ export interface SubmitParams {
   mouthInfo?: MouthInfo;
 }
 
-export async function checkHealth(): Promise<boolean> {
+export async function checkHealth(externalSignal?: AbortSignal): Promise<boolean> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), HEALTH_CHECK_TIMEOUT_MS);
 
-    const res = await fetch(`${AI_SERVER_URL}/health`, {
-      signal: controller.signal,
-    });
+    // Combine external signal (component lifecycle) with internal timeout
+    let signal: AbortSignal = timeoutController.signal;
+    if (externalSignal) {
+      if (typeof AbortSignal.any === 'function') {
+        signal = AbortSignal.any([externalSignal, timeoutController.signal]);
+      } else {
+        // Fallback: forward external abort to timeout controller
+        if (externalSignal.aborted) {
+          clearTimeout(timeoutId);
+          return false;
+        }
+        externalSignal.addEventListener('abort', () => timeoutController.abort(), { once: true });
+      }
+    }
+
+    const res = await fetch(`${AI_SERVER_URL}/health`, { signal });
     clearTimeout(timeoutId);
     return res.ok;
   } catch {

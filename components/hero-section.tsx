@@ -9,9 +9,11 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ onStart }: HeroSectionProps) {
-  // Pre-warm Lightning.ai on mount (fire-and-forget)
+  // Pre-warm Lightning.ai on mount with proper cleanup
   useEffect(() => {
-    checkHealth().catch(() => {});
+    const controller = new AbortController();
+    checkHealth(controller.signal).catch(() => {});
+    return () => controller.abort();
   }, []);
 
   return (

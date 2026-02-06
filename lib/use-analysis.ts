@@ -15,10 +15,12 @@ export function useAnalysis() {
     setState({ phase: 'idle' });
   }, []);
 
-  const waitForWarmup = useCallback(async (): Promise<boolean> => {
+  const waitForWarmup = useCallback(async (signal?: AbortSignal): Promise<boolean> => {
     for (let i = 0; i < MAX_HEALTH_RETRIES; i++) {
-      const healthy = await checkHealth();
+      if (signal?.aborted) return false;
+      const healthy = await checkHealth(signal);
       if (healthy) return true;
+      if (signal?.aborted) return false;
       await new Promise(r => setTimeout(r, HEALTH_RETRY_INTERVAL_MS));
     }
     return false;
@@ -57,7 +59,7 @@ export function useAnalysis() {
       } catch (submitError) {
         // Likely cold start - try warming up
         setState({ phase: 'warming' });
-        const warmedUp = await waitForWarmup();
+        const warmedUp = await waitForWarmup(abortRef.current?.signal);
         if (!warmedUp) {
           setState({ phase: 'failed', error: '서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.', canRetry: true });
           return;
